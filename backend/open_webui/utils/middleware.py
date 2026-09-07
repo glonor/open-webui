@@ -517,6 +517,9 @@ def get_citation_source_from_tool_result(
                         'name': source_name,
                         'source': source_name,
                         **({'note_id': note_id} if note_id else {}),
+                        **({'page': chunk.get('page')} if chunk.get('page') is not None else {}),
+                        **({'content_type': chunk.get('content_type')} if chunk.get('content_type') else {}),
+                        **({'external': True} if chunk_type == 'external' else {}),
                     }
                 )
 
@@ -936,29 +939,42 @@ def handle_responses_streaming_event(
         return current_output, None
 
 
-def get_source_context(sources: list, source_ids: dict = None, include_content: bool = True) -> str:
+def get_source_context(
+    sources: list,
+    source_ids: dict = None,
+    include_content: bool = True,
+    reference_counts: dict = None,
+) -> str:
     """
     Build <source> tag context string from citation sources.
     """
     context_string = ''
     if source_ids is None:
         source_ids = {}
+    if reference_counts is None:
+        reference_counts = {}
+
     for source in sources:
         for doc, meta in zip(source.get('document', []), source.get('metadata', [])):
             source_id = meta.get('source') or source.get('source', {}).get('id') or 'N/A'
             if source_id not in source_ids:
                 source_ids[source_id] = len(source_ids) + 1
+
+            reference_index = reference_counts.get(source_id, 0)
+            reference_counts[source_id] = reference_index + 1
+
             src_name = source.get('source', {}).get('name')
             src_type = source.get('source', {}).get('type')
             src_rid = source.get('source', {}).get('id')
             body = doc if include_content else ''
             context_string += (
-                f'<source id="{source_ids[source_id]}"'
+                f'<source id="{source_ids[source_id]}#{reference_index}"'
                 + (f' name="{src_name}"' if src_name else '')
                 + (f' resource-type="{src_type}"' if src_type else '')
                 + (f' resource-id="{src_rid}"' if src_rid else '')
                 + f'>{body}</source>\n'
             )
+
     return context_string
 
 
@@ -6082,12 +6098,16 @@ async def streaming_chat_response_handler(response, ctx):
                             # Build context: file sources with content,
                             # tool sources as citation markers only.
                             source_ids = {}
+                            reference_counts = {}
                             source_context = get_source_context(
-                                metadata.get('sources', []), source_ids
+                                metadata.get('sources', []),
+                                source_ids,
+                                reference_counts=reference_counts,
                             ) + get_source_context(
                                 all_tool_call_sources,
                                 source_ids,
                                 include_content=False,
+                                reference_counts=reference_counts,
                             )
                             source_context = source_context.strip()
                             if source_context:
