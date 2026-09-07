@@ -116,6 +116,14 @@
 		pdfViewerRef?.resetView();
 	};
 
+	export const scrollToPage = async (page: number) => {
+		currentSlide = Math.max(0, page - 1);
+		pageTarget = page;
+		await tick();
+		await pdfViewerRef?.scrollToPage?.(page);
+		scrollSelectedThumbnailIntoView();
+	};
+
 	const handlePageChange = (page: number) => {
 		currentSlide = page - 1;
 		if (singlePage) pageTarget = page;
