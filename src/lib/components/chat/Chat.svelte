@@ -70,6 +70,7 @@
 	import { AudioQueue } from '$lib/utils/audio';
 	import { createTemporaryChatId, isTemporaryChatId } from '$lib/utils/chatId';
 	import { applyResponseStreamEvent, getOutputText } from './Messages/structuredOutput';
+	import type { OpenSourcePreview, SourcePreviewTarget } from './sourcePreview';
 
 	import {
 		archiveChatById,
@@ -146,7 +147,18 @@
 		null;
 
 	let loading = true;
+	let sourcePreviewTarget: SourcePreviewTarget | null = null;
+
+	const openSourcePreview: OpenSourcePreview = (target) => {
+		sourcePreviewTarget = target;
+		showCallOverlay.set(false);
+		showArtifacts.set(false);
+		showEmbeds.set(false);
+		showControls.set(true);
+	};
+
 	$: chatContainerId = embedded ? 'note-chat-container' : 'chat-container';
+	$: if (sourcePreviewTarget && sourcePreviewTarget.chatId !== $chatId) sourcePreviewTarget = null;
 	$: messageInputDropzoneId = embedded ? 'note-chat-input-dropzone' : 'chat-pane';
 
 	const eventTarget = new EventTarget();
@@ -4403,6 +4415,7 @@
 										bottomPadding={files.length > 0}
 										{onSelect}
 										{onInsertToNote}
+										onOpenSourcePreview={openSourcePreview}
 									/>
 								</div>
 							</div>
@@ -4645,6 +4658,7 @@
 						{showMessage}
 						{eventTarget}
 						{codeInterpreterEnabled}
+						bind:sourcePreviewTarget
 					/>
 				{/if}
 			</div>

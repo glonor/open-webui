@@ -66,6 +66,7 @@
 	import FullHeightIframe from '$lib/components/common/FullHeightIframe.svelte';
 	import OutputEditView from './OutputEditView.svelte';
 	import { getOutputText, replaceOutputMessageText, type OutputItem } from './structuredOutput';
+	import type { OpenSourcePreview } from '$lib/components/chat/sourcePreview';
 
 	interface MessageType {
 		id: string;
@@ -168,6 +169,7 @@
 
 	export let addMessages: Function;
 	export let onToolCallResolved: Function = () => {};
+	export let onOpenSourcePreview: OpenSourcePreview = () => {};
 
 	export let isLastMessage = true;
 	export let readOnly = false;
@@ -906,6 +908,7 @@
 									{chatId}
 									sources={message?.sources ?? message?.citations}
 									{readOnly}
+									{onOpenSourcePreview}
 								/>
 							{/if}
 

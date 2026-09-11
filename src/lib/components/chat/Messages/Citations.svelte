@@ -2,6 +2,11 @@
 	import { getContext } from 'svelte';
 	import { embed, showControls, showEmbeds } from '$lib/stores';
 	import { isValidHttpUrl } from '$lib/utils';
+	import {
+		getExactPdfSourceTarget,
+		hasAlignedReferences,
+		type OpenSourcePreview
+	} from '$lib/components/chat/sourcePreview';
 
 	import CitationModal from './Citations/CitationModal.svelte';
 
@@ -12,6 +17,7 @@
 
 	export let sources = [];
 	export let readOnly = false;
+	export let onOpenSourcePreview: OpenSourcePreview = () => {};
 
 	let citations = [];
 	let showPercentage = false;
@@ -23,6 +29,37 @@
 	let showCitationModal = false;
 
 	let selectedCitation: any = null;
+	let sourceRequestId = 0;
+
+	const getReferenceIndex = (citation: any, suffix: string | null) => {
+		if (!suffix || !/^\d+$/.test(suffix)) return null;
+
+		const index = Number(suffix);
+		// Exact ids index aligned document/metadata pairs emitted by the backend.
+		const referenceCount = Math.min(
+			citation?.metadata?.length ?? 0,
+			citation?.document?.length ?? 0
+		);
+
+		return index >= 0 && index < referenceCount ? index : null;
+	};
+
+	const openCitationSourcePreview = (groupIndex: number, referenceIndex: number) => {
+		if (readOnly || !hasAlignedReferences(sources)) return false;
+
+		// Bump for repeated clicks on the same citation so PDFViewer scrolls again.
+		const target = getExactPdfSourceTarget(
+			chatId,
+			id,
+			citations[groupIndex],
+			referenceIndex,
+			`${id}:${++sourceRequestId}`
+		);
+		if (!target) return false;
+
+		onOpenSourcePreview(target);
+		return true;
+	};
 
 	export const showSourceModal = (sourceId) => {
 		let index;
@@ -33,7 +70,7 @@
 			index = parseInt(output[0]) - 1;
 
 			if (output.length > 1) {
-				suffix = output[1];
+				suffix = output.slice(1).join('#');
 			}
 		} else {
 			index = sourceId - 1;
@@ -41,6 +78,21 @@
 
 		if (citations[index]) {
 			console.log('Showing citation modal for:', citations[index]);
+
+			if (suffix !== null) {
+				const referenceIndex = getReferenceIndex(citations[index], suffix);
+				if (referenceIndex === null) {
+					selectedCitation = citations[index];
+					showCitationModal = true;
+					return;
+				}
+
+				if (openCitationSourcePreview(index, referenceIndex)) return;
+
+				selectedCitation = citations[index];
+				showCitationModal = true;
+				return;
+			}
 
 			if (citations[index]?.source?.embed_url) {
 				const embedUrl = citations[index].source.embed_url;
@@ -116,7 +168,7 @@
 				const distance = source?.distances?.[index];
 
 				// Within the same citation there could be multiple documents
-				const id = metadata?.source ?? source?.source?.id ?? 'N/A';
+				const id = metadata?.source || source?.source?.id || 'N/A';
 				let _source = source?.source;
 
 				if (metadata?.name) {

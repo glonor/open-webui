@@ -24,6 +24,7 @@
 		formatMessageTimestampFull,
 		getDeepestChildId
 	} from '$lib/utils';
+	import type { OpenSourcePreview } from '$lib/components/chat/sourcePreview';
 	const i18n = getContext('i18n');
 
 	export let chatId;
@@ -53,6 +54,7 @@
 
 	export let addMessages: Function;
 	export let onToolCallResolved: Function = () => {};
+	export let onOpenSourcePreview: OpenSourcePreview = () => {};
 	export let forkHandler: Function | null = null;
 
 	export let triggerScroll: Function;
@@ -312,6 +314,7 @@
 									{compactPreview}
 									{topPadding}
 									{onInsertToNote}
+									{onOpenSourcePreview}
 								/>
 							{/if}
 						{/key}
@@ -377,6 +380,7 @@
 										{editCodeBlock}
 										{topPadding}
 										{onInsertToNote}
+										{onOpenSourcePreview}
 									/>
 								{/if}
 							{/key}

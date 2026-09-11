@@ -1,5 +1,5 @@
 <script context="module" lang="ts">
-	let savedTab: 'controls' | 'files' | 'overview' = 'controls';
+	let savedTab: 'controls' | 'files' | 'source' | 'overview' = 'controls';
 </script>
 
 <script lang="ts">
@@ -26,6 +26,8 @@
 	import FileNav from './FileNav.svelte';
 	import PyodideFileNav from './PyodideFileNav.svelte';
 	import Overview from './Overview.svelte';
+	import SourcePreview from './ChatControls/SourcePreview.svelte';
+	import type { SourcePreviewTarget } from './sourcePreview';
 	import { isSavedChatId } from '$lib/utils/chatId';
 
 	const i18n = getContext('i18n');
@@ -47,6 +49,7 @@
 	export let modelId;
 
 	export let codeInterpreterEnabled = false;
+	export let sourcePreviewTarget: SourcePreviewTarget | null = null;
 
 	let largeScreen = false;
 	let dragged = false;
@@ -84,6 +87,11 @@
 		terminalFilesAvailable ||
 		(codeInterpreterEnabled && $config?.code?.interpreter_engine !== 'jupyter');
 	$: showOverviewTab = hasMessages;
+	$: if (sourcePreviewTarget) activeTab = 'source';
+	$: if (!sourcePreviewTarget && activeTab === 'source') {
+		activeTab = 'controls';
+		showControls.set(false);
+	}
 
 	// Tab fallback: if active tab becomes hidden, switch to next available
 	$: if (!showOverviewTab && activeTab === 'overview') activeTab = 'controls';
@@ -94,7 +102,7 @@
 	}
 
 	// Auto-close if there are no visible tabs
-	$: if (!showControlsTab && !showFilesTab && !showOverviewTab) {
+	$: if (!showControlsTab && !showFilesTab && !showOverviewTab && !sourcePreviewTarget) {
 		showControls.set(false);
 	}
 
@@ -219,7 +227,7 @@
 				{:else if $showArtifacts}
 					<Artifacts {history} />
 				{:else}
-					<!-- Controls + Files tabs -->
+					<!-- Controls panel tabs -->
 					<div class="flex flex-col h-full min-h-0">
 						<!-- Tab bar -->
 						<div class="flex items-center justify-between px-2 pt-2 pb-2 shrink-0">
@@ -257,6 +265,17 @@
 										{$i18n.t('Overview')}
 									</button>
 								{/if}
+								{#if sourcePreviewTarget}
+									<button
+										class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
+										'source'
+											? 'bg-gray-100/40 dark:bg-gray-800/25 font-normal text-gray-700 dark:text-gray-200'
+											: 'text-gray-500 dark:text-gray-400 hover:bg-gray-100/30 dark:hover:bg-gray-800/20 hover:text-gray-600 dark:hover:text-gray-300'}"
+										on:click={() => (activeTab = 'source')}
+									>
+										{$i18n.t('Source')}
+									</button>
+								{/if}
 							</div>
 							<button
 								class="p-1 rounded-lg text-gray-500 dark:text-gray-400"
@@ -277,13 +296,18 @@
 						</div>
 
 						<div
-							class="flex-1 min-h-0 {activeTab === 'overview'
+							class="flex-1 min-h-0 {activeTab === 'overview' || activeTab === 'source'
 								? 'h-full'
 								: activeTab === 'controls'
 									? 'overflow-y-auto px-3 pt-1'
 									: ''}"
 						>
-							{#if activeTab === 'overview'}
+							{#if sourcePreviewTarget}
+								<div class="h-full min-h-0" class:hidden={activeTab !== 'source'}>
+									<SourcePreview target={sourcePreviewTarget} />
+								</div>
+							{/if}
+							{#if activeTab === 'source'}{:else if activeTab === 'overview'}
 								<Overview
 									{history}
 									{chatUser}
@@ -320,7 +344,8 @@
 			<div
 				class="w-full {specialPanel && !$showCallOverlay
 					? ' '
-					: 'bg-white dark:bg-gray-900'} z-40 pointer-events-auto {activeTab === 'files'
+					: 'bg-white dark:bg-gray-900'} z-40 pointer-events-auto {activeTab === 'files' ||
+				activeTab === 'source'
 					? ''
 					: 'overflow-y-auto'} scrollbar-hidden"
 				id="controls-container"
@@ -342,7 +367,7 @@
 				{:else if $showArtifacts}
 					<Artifacts {history} overlay={dragged} />
 				{:else}
-					<!-- Controls + Files tabs -->
+					<!-- Controls panel tabs -->
 					<div class="flex flex-col h-full min-h-0">
 						<!-- Tab bar -->
 						<div class="flex items-center justify-between px-2 pt-2 pb-2 shrink-0">
@@ -380,6 +405,17 @@
 										{$i18n.t('Overview')}
 									</button>
 								{/if}
+								{#if sourcePreviewTarget}
+									<button
+										class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
+										'source'
+											? 'bg-gray-100/40 dark:bg-gray-800/25 font-normal text-gray-700 dark:text-gray-200'
+											: 'text-gray-500 dark:text-gray-400 hover:bg-gray-100/30 dark:hover:bg-gray-800/20 hover:text-gray-600 dark:hover:text-gray-300'}"
+										on:click={() => (activeTab = 'source')}
+									>
+										{$i18n.t('Source')}
+									</button>
+								{/if}
 							</div>
 							<button
 								class="p-1 rounded-lg text-gray-500 dark:text-gray-400"
@@ -400,13 +436,18 @@
 						</div>
 
 						<div
-							class="flex-1 min-h-0 {activeTab === 'overview'
+							class="flex-1 min-h-0 {activeTab === 'overview' || activeTab === 'source'
 								? 'h-full'
 								: activeTab === 'controls'
 									? 'overflow-y-auto px-3 pt-1'
 									: ''}"
 						>
-							{#if activeTab === 'overview'}
+							{#if sourcePreviewTarget}
+								<div class="h-full min-h-0" class:hidden={activeTab !== 'source'}>
+									<SourcePreview target={sourcePreviewTarget} />
+								</div>
+							{/if}
+							{#if activeTab === 'source'}{:else if activeTab === 'overview'}
 								<Overview
 									{history}
 									{chatUser}
