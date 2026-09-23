@@ -9,6 +9,7 @@
 	import { deleteChatMessageById, updateChatById } from '$lib/apis/chats';
 	import { copyToClipboard, extractCurlyBraceWords, getDeepestChildId } from '$lib/utils';
 	import { getOutputText } from './Messages/structuredOutput';
+	import type { OpenSourcePreview } from './sourcePreview';
 
 	import Message from './Messages/Message.svelte';
 	import Loader from '../common/Loader.svelte';
@@ -42,6 +43,7 @@
 	export let submitMessage: Function = () => {};
 	export let addMessages: Function = () => {};
 	export let onToolCallResolved: Function = () => {};
+	export let onOpenSourcePreview: OpenSourcePreview = () => {};
 	export let forkHandler: Function | null = null;
 
 	export let readOnly = false;
@@ -530,6 +532,7 @@
 								{editCodeBlock}
 								{topPadding}
 								{onInsertToNote}
+								{onOpenSourcePreview}
 							/>
 						{/each}
 					</ul>

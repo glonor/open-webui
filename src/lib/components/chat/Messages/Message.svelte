@@ -7,6 +7,7 @@
 
 	import { settings } from '$lib/stores';
 	import { copyToClipboard } from '$lib/utils';
+	import type { OpenSourcePreview } from '$lib/components/chat/sourcePreview';
 
 	import MultiResponseMessages from './MultiResponseMessages.svelte';
 	import ResponseMessage from './ResponseMessage.svelte';
@@ -40,6 +41,7 @@
 
 	export let addMessages;
 	export let onToolCallResolved: Function = () => {};
+	export let onOpenSourcePreview: OpenSourcePreview = () => {};
 	export let forkHandler: Function | null = null;
 	export let triggerScroll;
 	export let readOnly = false;
@@ -118,6 +120,7 @@
 				{editCodeBlock}
 				{topPadding}
 				{onInsertToNote}
+				{onOpenSourcePreview}
 			/>
 		{:else}
 			{#key messageId}
@@ -148,6 +151,7 @@
 					{editCodeBlock}
 					{topPadding}
 					{onInsertToNote}
+					{onOpenSourcePreview}
 				/>
 			{/key}
 		{/if}
