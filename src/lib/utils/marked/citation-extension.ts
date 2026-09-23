@@ -13,10 +13,10 @@ export function citationExtension() {
 			// Avoid matching footnotes
 			if (/^\[\^/.test(src)) return;
 
-			// Match ONE OR MORE adjacent [1], [1,2], or [1#foo] blocks
-			// Example matched: "[1][2,3][4#bar]"
-			// We allow: digits, commas, spaces, and # followed by non-control chars (excluding ] and ,)
-			const rule = /^(\[(?:\d+(?:#[^,\]\s]+)?(?:,\s*\d+(?:#[^,\]\s]+)?)*)\])+/;
+			// Match ONE OR MORE adjacent [1], [1,2], or [1#0] blocks
+			// Example matched: "[1][2,3][4#0]"
+			// A # suffix may be empty; otherwise it excludes commas, ] and whitespace.
+			const rule = /^(\[(?:\d+(?:#[^,\]\s]*)?(?:,\s*\d+(?:#[^,\]\s]*)?)*)\])+/;
 			const match = rule.exec(src);
 			if (!match) return;
 
@@ -29,17 +29,17 @@ export function citationExtension() {
 			let m: RegExpExecArray | null;
 
 			while ((m = groupRegex.exec(raw))) {
-				// m[1] is the content inside brackets, e.g. "1, 2#foo"
+				// m[1] is the content inside brackets, e.g. "1, 2#0"
 				const parts = m[1].split(',').map((p) => p.trim());
 
 				parts.forEach((part) => {
 					// Check if it starts with digit
-					const match = /^(\d+)(?:#(.+))?$/.exec(part);
+					const match = /^(\d+)(?:#(.*))?$/.exec(part);
 					if (match) {
 						const index = parseInt(match[1], 10);
 						if (!isNaN(index)) {
 							ids.push(index);
-							// Store the full identifier ("1#foo" or "1")
+							// Store the full identifier ("1#0" or "1")
 							citationIdentifiers.push(part);
 						}
 					}
