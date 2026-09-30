@@ -1051,18 +1051,26 @@ def add_citation_ids_to_tool_result(tool_result: Any, citation_ids: dict) -> Any
     return JSONCodec.dumps(chunks, ensure_ascii=False) if serialized_result else chunks
 
 
-def get_source_context(sources: list, source_ids: dict = None, include_content: bool = True) -> str:
+def get_source_context(
+    sources: list,
+    source_ids: dict = None,
+    include_content: bool = True,
+    reference_counts: dict = None,
+) -> str:
     """
     Build <source> tag context string from citation sources.
     """
     context_string = ''
     if source_ids is None:
         source_ids = {}
+    if reference_counts is None:
+        reference_counts = {}
+
     for source in sources:
         for doc, meta in zip(source.get('document', []), source.get('metadata', [])):
-            source_id = meta.get('source') or source.get('source', {}).get('id') or 'N/A'
-            if source_id not in source_ids:
-                source_ids[source_id] = len(source_ids) + 1
+            source_reference_id = get_source_reference_id(
+                source, meta, source_ids, reference_counts
+            )
             src_name = source.get('source', {}).get('name')
             src_type = source.get('source', {}).get('type')
             src_rid = source.get('source', {}).get('id')
@@ -1073,7 +1081,7 @@ def get_source_context(sources: list, source_ids: dict = None, include_content: 
                     continue
                 extra_attrs += f' {key}="{html.escape(str(value))}"'
             context_string += (
-                f'<source id="{source_ids[source_id]}"'
+                f'<source id="{source_reference_id}"'
                 + (f' name="{src_name}"' if src_name else '')
                 + (f' resource-type="{src_type}"' if src_type else '')
                 + (f' resource-id="{src_rid}"' if src_rid else '')
@@ -6221,12 +6229,16 @@ async def streaming_chat_response_handler(response, ctx):
                             # Build context: file sources with content,
                             # tool sources as citation markers only.
                             source_ids = {}
+                            reference_counts = {}
                             source_context = get_source_context(
-                                metadata.get('sources', []), source_ids
+                                metadata.get('sources', []),
+                                source_ids,
+                                reference_counts=reference_counts,
                             ) + get_source_context(
                                 all_tool_call_sources,
                                 source_ids,
                                 include_content=False,
+                                reference_counts=reference_counts,
                             )
                             source_context = source_context.strip()
                             if source_context:
