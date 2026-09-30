@@ -2615,6 +2615,12 @@ async def query_chat_files(
                     'content': doc,
                     'source': metadata.get('source', metadata.get('name', source_info.get('name', 'Unknown'))),
                     'file_id': metadata.get('file_id', source_info.get('id', '')),
+                    **({'page': metadata.get('page')} if metadata.get('page') is not None else {}),
+                    **(
+                        {'content_type': metadata.get('content_type') or metadata.get('Content-Type')}
+                        if metadata.get('content_type') or metadata.get('Content-Type')
+                        else {}
+                    ),
                 }
                 if idx < len(distances):
                     chunk['distance'] = distances[idx]
@@ -3329,6 +3335,15 @@ async def query_knowledge_files(
                         'content': doc,
                         'source': metadatas[idx].get('source', metadatas[idx].get('name', 'Unknown')),
                         'file_id': metadatas[idx].get('file_id', ''),
+                        **({'page': metadatas[idx].get('page')} if metadatas[idx].get('page') is not None else {}),
+                        **(
+                            {
+                                'content_type': metadatas[idx].get('content_type')
+                                or metadatas[idx].get('Content-Type')
+                            }
+                            if metadatas[idx].get('content_type') or metadatas[idx].get('Content-Type')
+                            else {}
+                        ),
                     }
                     if idx < len(distances):
                         chunk_info['distance'] = distances[idx]
@@ -3355,6 +3370,12 @@ async def query_knowledge_files(
                     'file_id': metadata.get('file_id', f'external-{knowledge.id}'),
                     'type': 'external',
                     'knowledge_id': knowledge.id,
+                    **({'page': metadata.get('page')} if metadata.get('page') is not None else {}),
+                    **(
+                        {'content_type': metadata.get('content_type') or metadata.get('Content-Type')}
+                        if metadata.get('content_type') or metadata.get('Content-Type')
+                        else {}
+                    ),
                 }
                 if idx < len(distances):
                     chunk_info['distance'] = distances[idx]

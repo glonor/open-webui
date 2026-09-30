@@ -14,6 +14,7 @@ import re
 import sys
 import textwrap
 import time
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 from urllib.parse import unquote
@@ -413,6 +414,13 @@ def _split_tool_calls(
     return expanded
 
 
+def is_valid_citation_chunk(chunk: Any) -> bool:
+    return isinstance(chunk, dict) and all(
+        key not in chunk or isinstance(chunk[key], str)
+        for key in ('source', 'name', 'file_id', 'type', 'content')
+    )
+
+
 def get_citation_source_from_tool_result(
     tool_name: str, tool_params: dict, tool_result: str, tool_id: str = ''
 ) -> list[dict]:
@@ -520,6 +528,9 @@ def get_citation_source_from_tool_result(
                         'name': source_name,
                         'source': source_name,
                         **({'note_id': note_id} if note_id else {}),
+                        **({'page': chunk.get('page')} if chunk.get('page') is not None else {}),
+                        **({'content_type': chunk.get('content_type')} if chunk.get('content_type') else {}),
+                        **({'external': True} if chunk_type == 'external' else {}),
                     }
                 )
                 if 'distance' in chunk:
@@ -942,6 +953,100 @@ def handle_responses_streaming_event(
 
     else:
         return current_output, None
+
+
+def get_source_reference_id(source: dict, metadata: dict, source_ids: dict, reference_counts: dict) -> str:
+    source_id = metadata.get('source') or source.get('source', {}).get('id') or 'N/A'
+    if source_id not in source_ids:
+        source_ids[source_id] = len(source_ids) + 1
+
+    reference_index = reference_counts.get(source_id, 0)
+    reference_counts[source_id] = reference_index + 1
+    return f'{source_ids[source_id]}#{reference_index}'
+
+
+def get_citation_reference_key(source: dict, document: str, metadata: dict) -> tuple | None:
+    file_id = metadata.get('file_id')
+    page = metadata.get('page')
+    if (
+        not isinstance(file_id, str)
+        or not file_id
+        or type(page) is not int
+        or page < 0
+        or metadata.get('external')
+        or source.get('source', {}).get('type') == 'external'
+    ):
+        return None
+    source_id = metadata.get('source') or source.get('source', {}).get('id') or 'N/A'
+    return source_id, file_id, page, document
+
+
+def register_tool_citation_sources(
+    citation_sources: list[dict],
+    source_ids: dict,
+    reference_counts: dict,
+    reference_ids: dict,
+) -> tuple[list[dict], dict]:
+    # Repeated file passages reuse their id and are emitted only once.
+    citation_ids = defaultdict(deque)
+    new_sources = []
+    for source in citation_sources:
+        documents = source.get('document', [])
+        metadatas = source.get('metadata', [])
+        new_indices = []
+        for index, (document, metadata) in enumerate(zip(documents, metadatas)):
+            reference_key = get_citation_reference_key(source, document, metadata)
+            reference_id = reference_ids.get(reference_key)
+            if reference_id is None:
+                reference_id = get_source_reference_id(source, metadata, source_ids, reference_counts)
+                if reference_key is not None:
+                    reference_ids[reference_key] = reference_id
+                new_indices.append(index)
+            key = (metadata.get('file_id', ''), metadata.get('source'), document)
+            citation_ids[key].append(reference_id)
+        if not new_indices:
+            continue
+
+        new_source = {
+            **source,
+            'document': [documents[index] for index in new_indices],
+            'metadata': [metadatas[index] for index in new_indices],
+        }
+        if 'distances' in source:
+            distances = source['distances']
+            new_source['distances'] = [distances[index] for index in new_indices if index < len(distances)]
+        new_sources.append(new_source)
+
+    return new_sources, citation_ids
+
+
+def add_citation_ids_to_tool_result(tool_result: Any, citation_ids: dict) -> Any:
+    serialized_result = isinstance(tool_result, str)
+    if serialized_result:
+        try:
+            chunks = JSONCodec.loads(tool_result)
+        except JSONCodec.JSONDecodeError:
+            return tool_result
+    else:
+        chunks = tool_result
+
+    if not isinstance(chunks, list):
+        return tool_result
+
+    for chunk in chunks:
+        if not is_valid_citation_chunk(chunk):
+            continue
+
+        key = (
+            chunk.get('file_id', ''),
+            chunk.get('source') or chunk.get('name') or chunk.get('file_id') or 'Unknown',
+            chunk.get('content', ''),
+        )
+        matching_ids = citation_ids.get(key)
+        if matching_ids:
+            chunk['citation_id'] = matching_ids.popleft()
+
+    return JSONCodec.dumps(chunks, ensure_ascii=False) if serialized_result else chunks
 
 
 def get_source_context(sources: list, source_ids: dict = None, include_content: bool = True) -> str:
@@ -5797,6 +5902,23 @@ async def streaming_chat_response_handler(response, ctx):
                 citations_enabled = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get(
                     'citations', True
                 )
+                citation_source_ids = {}
+                citation_reference_counts = {}
+                citation_reference_ids = {}
+                if citations_enabled:
+                    for source in metadata.get('sources', []):
+                        for document, citation_metadata in zip(
+                            source.get('document', []), source.get('metadata', [])
+                        ):
+                            reference_id = get_source_reference_id(
+                                source,
+                                citation_metadata,
+                                citation_source_ids,
+                                citation_reference_counts,
+                            )
+                            reference_key = get_citation_reference_key(source, document, citation_metadata)
+                            if reference_key is not None:
+                                citation_reference_ids.setdefault(reference_key, reference_id)
 
                 # Use the pre-RAG system content captured before the
                 # initial file-source injection in process_chat_payload.
@@ -6001,6 +6123,13 @@ async def streaming_chat_response_handler(response, ctx):
                                     tool_result=tool_result,
                                     tool_id=tool.get('tool_id', '') if tool else '',
                                 )
+                                citation_sources, citation_ids = register_tool_citation_sources(
+                                    citation_sources,
+                                    citation_source_ids,
+                                    citation_reference_counts,
+                                    citation_reference_ids,
+                                )
+                                tool_result = add_citation_ids_to_tool_result(tool_result, citation_ids)
                                 tool_call_sources.extend(citation_sources)
                             except Exception as e:
                                 log.exception(f'Error extracting citation source: {e}')
