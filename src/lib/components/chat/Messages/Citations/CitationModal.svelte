@@ -18,6 +18,7 @@
 
 	export let show = false;
 	export let citation;
+	export let selectedReferenceIndex: number | null = null;
 	export let showPercentage = false;
 	export let showRelevance = true;
 
@@ -50,7 +51,9 @@
 				distance: citation.distances?.[i]
 			};
 		});
-		if (mergedDocuments.every((doc) => doc.distance !== undefined)) {
+		if (selectedReferenceIndex !== null) {
+			mergedDocuments = mergedDocuments.slice(selectedReferenceIndex, selectedReferenceIndex + 1);
+		} else if (mergedDocuments.every((doc) => doc.distance !== undefined)) {
 			mergedDocuments = mergedDocuments.sort(
 				(a, b) => (b.distance ?? Infinity) - (a.distance ?? Infinity)
 			);
@@ -102,6 +105,8 @@
 			<div class=" text-sm font-medium self-center flex items-center">
 				{#if citation?.source?.name}
 					{@const document = mergedDocuments?.[0]}
+					{@const name =
+						(selectedReferenceIndex !== null && document?.metadata?.name) || citation.source.name}
 					{#if document?.metadata?.file_id || isValidHttpUrl(document.source?.url)}
 						<Tooltip
 							className="w-fit"
@@ -120,11 +125,11 @@
 										: `#`}
 								target="_blank"
 							>
-								{decodeString(citation?.source?.name)}
+								{decodeString(name)}
 							</a>
 						</Tooltip>
 					{:else}
-						{decodeString(citation?.source?.name)}
+						{decodeString(name)}
 					{/if}
 				{:else}
 					{$i18n.t('Citation')}
@@ -178,7 +183,7 @@
 									{$i18n.t('Content')}
 								{/if}
 
-								{#if showRelevance && document.distance !== undefined}
+								{#if selectedReferenceIndex === null && showRelevance && document.distance !== undefined}
 									<Tooltip
 										className="w-fit"
 										content={$i18n.t('Relevance')}

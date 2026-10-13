@@ -15,8 +15,8 @@ export function citationExtension() {
 
 			// Match ONE OR MORE adjacent [1], [1,2], or [1#foo] blocks
 			// Example matched: "[1][2,3][4#bar]"
-			// We allow: digits, commas, spaces, and # followed by non-control chars (excluding ] and ,)
-			const rule = /^(\[(?:\d+(?:#[^,\]\s]+)?(?:,\s*\d+(?:#[^,\]\s]+)?)*)\])+/;
+			// We allow: digits, commas, spaces, and # followed by zero or more non-control chars (excluding ] and ,)
+			const rule = /^(\[(?:\d+(?:#[^,\]\s]*)?(?:,\s*\d+(?:#[^,\]\s]*)?)*)\])+/;
 			const match = rule.exec(src);
 			if (!match) return;
 
@@ -34,7 +34,7 @@ export function citationExtension() {
 
 				parts.forEach((part) => {
 					// Check if it starts with digit
-					const match = /^(\d+)(?:#(.+))?$/.exec(part);
+					const match = /^(\d+)(?:#(.*))?$/.exec(part);
 					if (match) {
 						const index = parseInt(match[1], 10);
 						if (!isNaN(index)) {

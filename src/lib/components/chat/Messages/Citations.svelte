@@ -23,6 +23,37 @@
 	let showCitationModal = false;
 
 	let selectedCitation: any = null;
+	let selectedReferenceIndex: number | null = null;
+
+	const getReferenceIndex = (citation, suffix: string | null) => {
+		if (!suffix || !/^\d+$/.test(suffix)) {
+			return null;
+		}
+
+		let referencesAligned = true;
+		for (const source of sources) {
+			if ((source.document?.length ?? 0) !== (source.metadata?.length ?? 0)) {
+				referencesAligned = false;
+			}
+
+			// Earlier malformed sources can also shift citation group IDs.
+			if (
+				!referencesAligned &&
+				source.document?.some(
+					(_, index) =>
+						(source.metadata?.[index]?.source || source.source?.id || 'N/A') === citation.id
+				)
+			) {
+				return null;
+			}
+		}
+
+		const index = Number(suffix);
+		const referenceCount = Math.min(citation.document?.length ?? 0, citation.metadata?.length ?? 0);
+		return Number.isSafeInteger(index) && index < referenceCount && citation.metadata?.[index]
+			? index
+			: null;
+	};
 
 	export const showSourceModal = (sourceId) => {
 		let index;
@@ -33,7 +64,7 @@
 			index = parseInt(output[0]) - 1;
 
 			if (output.length > 1) {
-				suffix = output[1];
+				suffix = output.slice(1).join('#');
 			}
 		} else {
 			index = sourceId - 1;
@@ -41,6 +72,7 @@
 
 		if (citations[index]) {
 			console.log('Showing citation modal for:', citations[index]);
+			selectedReferenceIndex = null;
 
 			if (citations[index]?.source?.embed_url) {
 				const embedUrl = citations[index].source.embed_url;
@@ -71,6 +103,7 @@
 				}
 			} else {
 				selectedCitation = citations[index];
+				selectedReferenceIndex = getReferenceIndex(selectedCitation, suffix);
 				showCitationModal = true;
 			}
 		}
@@ -116,7 +149,7 @@
 				const distance = source?.distances?.[index];
 
 				// Within the same citation there could be multiple documents
-				const id = metadata?.source ?? source?.source?.id ?? 'N/A';
+				const id = metadata?.source || source?.source?.id || 'N/A';
 				let _source = source?.source;
 
 				if (metadata?.name) {
@@ -164,6 +197,7 @@
 <CitationModal
 	bind:show={showCitationModal}
 	citation={selectedCitation}
+	{selectedReferenceIndex}
 	{showPercentage}
 	{showRelevance}
 />
@@ -232,6 +266,7 @@
 					on:click={() => {
 						showCitationModal = true;
 						selectedCitation = citation;
+						selectedReferenceIndex = null;
 					}}
 				>
 					<div class=" font-normal bg-gray-50 dark:bg-gray-850 rounded-md px-1">
