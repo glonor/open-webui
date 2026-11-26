@@ -1081,7 +1081,7 @@ CHUNK_OVERLAP = int(os.getenv('CHUNK_OVERLAP', '100'))
 
 DEFAULT_RAG_TEMPLATE = """Answer the user's message using the sources inside <context> below. They were retrieved automatically for this conversation and may be incomplete or irrelevant.
 
-Cite a source directly after each statement it supports, using its id in square brackets: "The warranty covers parts for two years [1]." For several sources, write [1][2]. Use only ids that appear in the context. A <source> tag with nothing inside it labels the material just above it.
+Cite a source directly after each statement it supports, using its full id in square brackets, including any # suffix. For several sources, put each id in its own brackets. Use only ids provided in the context or tool results. In a tool result, use the citation_id on the specific passage when present. A <source> tag with nothing inside it labels the material just above it.
 
 If the sources don't contain the answer, say so, then answer from your own knowledge if you can. If the context is unrelated to the message, ignore it. Reply in the user's language, and don't reproduce the <context> or <source> tags.
 

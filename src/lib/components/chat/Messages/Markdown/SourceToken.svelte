@@ -4,6 +4,7 @@
 	import type { Tokens } from 'marked';
 	import { LinkPreview } from 'bits-ui';
 	import { decodeString } from '$lib/utils';
+	import { resolveCitation } from '$lib/utils/citations';
 	import ArrowLeft from '$lib/components/icons/ArrowLeft.svelte';
 	import ArrowRight from '$lib/components/icons/ArrowRight.svelte';
 	import Source from './Source.svelte';
@@ -23,7 +24,7 @@
 	$: sources = [...new Set<string>(token.citationIdentifiers)]
 		.map((id) => ({
 			id,
-			citation: $citations.find((citation) => citation.number === parseInt(id.split('#')[0]))
+			citation: resolveCitation($citations, id)
 		}))
 		.filter(({ citation }) => citation && citation.title !== 'N/A');
 

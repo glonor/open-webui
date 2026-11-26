@@ -2,7 +2,7 @@
 	import { getContext } from 'svelte';
 	import { embed, showTabs, showEmbeds } from '$lib/stores';
 	import { isValidHttpUrl } from '$lib/utils';
-	import { getCitations } from '$lib/utils/citations';
+	import { getCitations, resolveCitation } from '$lib/utils/citations';
 
 	import CitationModal from './Citations/CitationModal.svelte';
 
@@ -26,9 +26,7 @@
 	let selectedCitation: any = null;
 
 	export const showSourceModal = (sourceId) => {
-		// "2#page" and 2 both name citation number 2
-		const number = typeof sourceId === 'string' ? parseInt(sourceId.split('#')[0]) : sourceId;
-		const citation = citations.find((citation) => citation.number === number);
+		const citation = resolveCitation(citations, sourceId);
 		if (citation) openCitation(citation, sourceId);
 	};
 

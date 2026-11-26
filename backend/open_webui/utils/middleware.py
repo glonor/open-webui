@@ -643,13 +643,27 @@ def get_source_context(sources: list, source_ids: dict = None, include_content: 
     for source in sources:
         citation_ids = get_citation_ids(source, source_ids)
         for doc, meta, citation_id in zip(source.get('document', []), source.get('metadata', []), citation_ids):
+            file_id, page = meta.get('file_id'), meta.get('page')
+            if (
+                file_id
+                and not meta.get('external')
+                and type(page) is int
+                and page >= 0
+                and doc
+                and str(meta.get('name') or '').lower().endswith('.pdf')
+            ):
+                # Retrieval order can change when the same file is searched in a later turn.
+                key = JSONCodec.dumps([file_id, page, doc])
+                ref = hashlib.sha256(key.encode()).hexdigest()[:16]
+                meta['citation_ref'] = ref
+                citation_id = f'{citation_id}#{ref}'
             src_name = source.get('source', {}).get('name')
             src_type = source.get('source', {}).get('type')
             src_rid = source.get('source', {}).get('id') if src_type != 'text' else None
             body = doc if include_content else ''
             extra_attrs = ''
             for key, value in filter_source_metadata(meta).items():
-                if key in ('id', 'name', 'resource-type', 'resource-id'):
+                if key in ('id', 'name', 'resource-type', 'resource-id', 'citation_ref'):
                     continue
                 extra_attrs += f' {key}="{html.escape(str(value))}"'
             context_string += (
@@ -715,6 +729,23 @@ async def tool_result_with_citations(name, params, result, tool, model, source_i
     if sources:
         # Number the sources before they are emitted, so the saved message keeps the numbers.
         context = get_source_context(sources, source_ids, include_content=False).strip()
+        if name in ('query_knowledge_files', 'query_chat_files'):
+            references = {
+                (meta['source'], meta['file_id'], meta['page'] + 1, doc): f"{number}#{meta['citation_ref']}"
+                for source in sources
+                for doc, meta, number in zip(source['document'], source['metadata'], source['citation_ids'])
+                if meta.get('citation_ref')
+            }
+            if references:
+                chunks = JSONCodec.loads(content)
+                for chunk in chunks:
+                    page = chunk.get('page')
+                    if chunk.get('type') == 'external' or type(page) is not int:
+                        continue
+                    key = (chunk.get('source', 'Unknown'), chunk.get('file_id', ''), page, chunk.get('content', ''))
+                    if key in references:
+                        chunk['citation_id'] = references[key]
+                content = tool_result_content(chunks)
         if event_emitter:
             for source in sources:
                 await event_emitter({'type': 'source', 'data': source})

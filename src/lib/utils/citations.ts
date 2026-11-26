@@ -51,13 +51,28 @@ export const getCitations = (sources: any[] | null | undefined) => {
 				title: metadata?.name || (isUrl ? id : (source.source?.name ?? id)),
 				source: _source,
 				document: [document],
-				metadata: metadata ? [metadata] : [],
+				metadata: [metadata],
 				distances: [distance]
 			});
 		});
 	}
 
 	return citations;
+};
+
+export const resolveCitation = (citations: any[], id: string | number) => {
+	const [group, ref] = String(id).split('#', 2);
+	const citation = citations.find((item) => item.number === Number(group));
+	if (!citation || !ref) return citation;
+
+	const index = citation.metadata.findIndex((meta) => meta?.citation_ref === ref);
+	if (index < 0) return citation;
+	return {
+		...citation,
+		document: [citation.document[index]],
+		metadata: [citation.metadata[index]],
+		distances: [citation.distances[index]]
+	};
 };
 
 const PASSAGE_PREVIEW_LIMIT = 400;
@@ -105,19 +120,19 @@ export const getCitationPreview = (citation: any) => {
 // [1], [1, 2] or [1#page]; not a link label like [1](url)
 const CITATION_PATTERN = /\[(\d+(?:#[^,\]\s]+)?(?:,\s*\d+(?:#[^,\]\s]+)?)*)\](?!\()/g;
 
-const getCitedNumbers = (content: string) => {
-	const numbers = new Set<number>();
+const getCitedIdentifiers = (content: string) => {
+	const identifiers = new Set<string>();
 	for (const segment of content.split(/(```[\s\S]*?```|`[\s\S]*?`)/)) {
 		if (segment.startsWith('`')) {
 			continue;
 		}
 		for (const match of segment.matchAll(CITATION_PATTERN)) {
 			for (const part of match[1].split(',')) {
-				numbers.add(parseInt(part, 10));
+				identifiers.add(part.trim());
 			}
 		}
 	}
-	return numbers;
+	return identifiers;
 };
 
 /**
@@ -133,11 +148,15 @@ export const getCarriedSources = (
 		return [];
 	}
 
-	const cited = getCitedNumbers(content);
+	const citedIdentifiers = getCitedIdentifiers(content);
+	const citedNumbers = new Set([...citedIdentifiers].map((id) => parseInt(id, 10)));
 	for (const citation of getCitations(message.sources ?? message.citations)) {
-		cited.delete(citation.number);
+		citedNumbers.delete(citation.number);
+		for (const meta of citation.metadata) {
+			if (meta?.citation_ref) citedIdentifiers.delete(`${citation.number}#${meta.citation_ref}`);
+		}
 	}
-	if (cited.size === 0) {
+	if (citedNumbers.size === 0 && ![...citedIdentifiers].some((id) => id.includes('#'))) {
 		return [];
 	}
 
@@ -154,6 +173,7 @@ export const getCarriedSources = (
 	// Number the chain the way the backend does: a saved number wins, anything else takes the next.
 	const numbers = new Map<string, number>();
 	const carried = new Map<number, any[]>();
+	const exact = new Map<string, any>();
 	for (const ancestor of ancestors) {
 		const found = new Map<number, any[]>();
 		for (const source of ancestor.sources ?? []) {
@@ -167,22 +187,24 @@ export const getCarriedSources = (
 				}
 
 				const number = numbers.get(id) as number;
-				if (!cited.has(number)) {
+				const metadata = source.metadata?.[index];
+				const idWithRef = `${number}#${metadata?.citation_ref}`;
+				const groupCited = citedNumbers.has(number);
+				const passageCited = metadata?.citation_ref && citedIdentifiers.has(idWithRef);
+				if (!groupCited && !passageCited) {
 					return;
 				}
 
-				const metadata = source.metadata?.[index];
 				const distance = source.distances?.[index];
-				found.set(number, [
-					...(found.get(number) ?? []),
-					{
-						source: source.source,
-						document: [document],
-						metadata: metadata ? [metadata] : [],
-						distances: distance !== undefined ? [distance] : [],
-						citation_ids: [number]
-					}
-				]);
+				const passage = {
+					source: source.source,
+					document: [document],
+					metadata: metadata ? [metadata] : [],
+					distances: distance !== undefined ? [distance] : [],
+					citation_ids: [number]
+				};
+				if (passageCited) exact.set(idWithRef, passage);
+				if (groupCited) found.set(number, [...(found.get(number) ?? []), passage]);
 			});
 		}
 		// When several turns hold a source, the latest is the copy the model saw last.
@@ -191,5 +213,5 @@ export const getCarriedSources = (
 		}
 	}
 
-	return [...carried.values()].flat();
+	return [...new Set([...carried.values()].flat().concat([...exact.values()]))];
 };
